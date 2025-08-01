@@ -96,6 +96,18 @@ TIME_WAIT 是：TCP 正常断开后的状态, 出现在主动关闭连接的一�
 
 # 三: TCP建立连接, 套接字编程
 
+## 套接字
+
+**通信的“端点”：** 两个设备要通信，就像两个人要通电话，都需要一个“电话”作为端点。套接字就是这个“电话”，它是数据在网络中传输的起点和终点。
+
+当你创建一个套接字时，你实际上是向操作系统请求一个用于网络通信的资源，这个资源会提供一系列函数（如 `socket()`, `bind()`, `listen()`, `connect()`, `send()`, `recv()`, `close()` 等），它们共同构成了进行网络通信的工具集。
+
+## 文件描述符
+
+套接字在Linux中以文件描述符的形式存在, 使用`socket()`创建一个套接字时, os会返回一个int值, 就是套接字对应的文件描述符
+
+>   在Linux系统中一切皆文件, 文件描述符是访问文件的“索引”, 每个打开的文件在进程中都有一个对应的文件描述符, 012对应标准输入标准输出和标准错误, 所以文件的文件描述符是从3开始的
+
 流程:
 
 <img src="C:\Users\18388\Desktop\Linux-Study\Linux网络编程\Linux网络编程.assets\image-20250729091921372.png" alt="image-20250729091921372" style="zoom:50%;" />
@@ -108,6 +120,13 @@ TIME_WAIT 是：TCP 正常断开后的状态, 出现在主动关闭连接的一�
 
 ![image-20250729092215400](C:\Users\18388\Desktop\Linux-Study\Linux网络编程\Linux网络编程.assets\image-20250729092215400.png)
 
+```c++
+int client_fd = socket(AF_INET, SOCK_STREAM, 0); // 使用ipv4和TCP协议
+if(client_fd < 0){
+	perror("socket ERROR");
+}   
+```
+
 socket函数返回的是一个整型数据，代表的就是一个套接字, 这是一个文件描述符, 代表了一个操作系统内核数据结构
 
 每个Linux进程在启动时都会默认开启三个文件描述符: 标准输入0, 标准输出1, 标准错误2
@@ -118,7 +137,35 @@ socket函数返回的是一个整型数据，代表的就是一个套接字, 这
 
 ![image-20250729092518134](C:\Users\18388\Desktop\Linux-Study\Linux网络编程\Linux网络编程.assets\image-20250729092518134.png)
 
->   示例: bind(sfd, (struct sockaddr*)&addr, sizeof(addr))
+>   **sockfd:**
+>
+>   这是一个**套接字文件描述符**，由 `socket()` 函数返回
+>
+>   
+>
+>   **addr:**
+>
+>   指向 struct sockaddr 结构体的指针。这个结构体包含了要绑定的本地 IP 地址和端口号信息
+>
+>   一般只有**两个选项**: struct sockaddr_in（用于 IPv4）或 struct sockaddr_in6（用于 IPv6）
+>
+>   
+>
+>   **socklen_t addrlen:**
+>
+>   这是 addr 参数所指向结构体的**大小**。一般使用 sizeof() 运算符来获取这个大小，例如 sizeof(struct sockaddr_in)
+>
+>   
+>
+>   **返回值:**
+>
+>   成功返回0, 失败返回-1并设置ERROR
+
+
+
+
+
+
 
 当服务器开始运行时需要将sfd和一个网络地址绑定在一块, 该网络地址需要暴露给客户端
 
@@ -214,7 +261,7 @@ send函数只是将用户态的发送缓冲区中的数据拷贝到内核态发�
 
 真正的发送操作是内核协议栈来完成的
 
->const void *buf, size_t len参数: 用户态指定的发送缓冲区
+>const void *buf, size_t len参数: 用户态指定的发送缓冲区和它的长度
 >
 >int flags参数: 一般设为0
 >
@@ -232,6 +279,12 @@ send函数只是将用户态的发送缓冲区中的数据拷贝到内核态发�
 
 # 四: IO多路复用模型, epoll
 
+![image-20250729201723033](C:\Users\18388\Desktop\Linux-Study\Linux网络编程\Linux网络编程.assets\image-20250729201723033.png)
+
+
+
+
+
 **IO**多路复用是一种同步IO模型，实现一个线程可以监听多个**文件描述符**；
 
 一旦某个文件描述符就绪，就能通知用户态程序进行相应的读写操作；
@@ -241,3 +294,178 @@ send函数只是将用户态的发送缓冲区中的数据拷贝到内核态发�
 **复用**是指一个线程处理多个文件描述符
 
 常见的IO多路复用模型有**select/poll/epoll**
+
+
+
+#include <sys/epoll.h>
+
+int epoll_create(int size);//被弃用了
+
+
+
+## epoll_create1()
+
+```c++
+int epoll_create1(int flags); 	// 创建一个epoll实例
+// 参数: 选择属性
+// 返回值: 成功时返回一个新的epoll实例的文件描述符, 失败返回-1并设置ERROR
+```
+
+**兴趣列表:**
+
+​	这个列表存储了所有使用epoll_ct1( )注册到该epoll实例中的文件描述符, 还有为这些文件描述符指定的感兴趣的事件和用户数据. 这个兴趣列表的数据结构一般是红黑树
+
+**就绪链表:**
+
+​	这个列表存储了当前已经**就绪**（即有 I/O 事件发生）的文件描述符。
+
+![image-20250729202603535](C:\Users\18388\Desktop\Linux-Study\Linux网络编程\Linux网络编程.assets\image-20250729202603535.png)
+
+
+
+
+
+
+
+
+
+## epoll_ct1()
+
+```c++
+int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event); // 用于操作epoll实例中注册的文件描述符
+```
+
+>**epfd:**
+>
+>这是上面那个函数epoll_create1()返回的epoll实例的文件描述符
+>
+>
+>
+>**op**: 
+>
+>EPOLL_CTL_ADD  添加
+>
+>EPOLL_CTL_MOD  修改
+>
+>EPOLL_CTL_DEL   删除
+>
+>
+>
+>**fd:**
+>
+>要操作的目标文件描述符
+>
+>
+>
+>**event:** 一个指向`struct epoll_event` 结构的指针, 用于指定与文件描述符关联的用户数据, 不用就是NULL
+>
+>下面是 struct epoll_event
+
+```c++
+struct epoll_event {
+    uint32_t    events; /* Epoll events */
+    epoll_data_t data;  /* User data variable */
+};
+```
+
+> **uint32_t    events: **
+>
+>这是一个32位无符号整数, 用每一位的01表示事件是否发生, 因此我们可以用**位运算**符来操作它(|按位或or)
+>
+>将整型数据中的某一个位置为1，就表示该事件发生了
+>
+>EPOLLIN   读事件
+>
+>EPOLLOUT 写事件
+>
+>EPOLLET   边缘触发
+>
+>EPOLLIN | EPOLLOUT 同时启用
+>
+>
+>
+>**epoll_data_t    data:**
+>
+>这是一个联合体, 作用是将任意自定义的数据与特定的文件描述符结合
+>
+>typedef union epoll_data {
+>    void    *ptr; // 指针，可以指向任何自定义数据结构
+>    int     fd;   // 文件描述符本身
+>    uint32_t u32; // 32位无符号整数
+>    uint64_t u64; // 64位无符号整数
+>} epoll_data_t;
+>
+>可以看到有一个void* ptr, 无类型指针可以指向任意类型的自定义类型, 只需要执行一次类型转换
+
+
+
+
+
+
+
+
+
+## epoll_wait()
+
+```c++
+int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout); 
+// 等待epoll实例中注册的事件的发生, 这是事件循环的核心函数。程序调用 epoll_wait() 暂停执行，等待所关注的文件描述符上发生I/O事件。当事件发生时，它会唤醒并返回就绪的事件列表，让程序能够处理这些I/O操作。
+```
+
+>**epfd:**
+>
+>epoll_create1() 返回的 epoll 实例的文件描述符。
+>
+>
+>
+>**events:**
+>
+>一个指向 `struct epoll_event` 结构数组的指针, 在**用户态**定义的一个数组，当期待的事件发生, epoll_wait函数返回时，会从内核态就绪链表中将已经就绪的文件描述符信息全部拷贝到用户态的该数组中
+>
+>
+>
+>**maxevents:**
+>
+>events 数组能够存放的最大事件数量。这个值必须大于 0
+>
+>
+>
+>**timeout:**
+>
+>超时时间（毫秒）。可以设为负数表示一直阻塞知道事件发生 / 可以设为0表示立即结束函数返回 / 可以设为>0表示将阻塞最多多少毫秒
+>
+>
+>
+>**返回值:**
+>
+>成功时返回就绪事件数量, 超时返回0, 失败返回-1并设置ERROR
+
+
+
+
+
+
+
+
+
+
+
+
+
+## select
+
+![image-20250729161716579](C:\Users\18388\Desktop\Linux-Study\Linux网络编程\Linux网络编程.assets\image-20250729161716579.png)
+
+>nfd: 文件描述符范围[0, nfds)
+>
+>readfds: 读事件集合
+>
+>writefds: 写事件集合
+>
+>exceptfds:
+>
+>timeout: 超时事件集合
+
+|  1   |      |      |      |      |      |      |      |
+| :--: | :--: | :--: | ---- | ---- | ---- | ---- | ---- |
+
