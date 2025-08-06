@@ -149,6 +149,8 @@ socket函数返回的是一个整型数据，代表的就是一个套接字, 这
 >
 >   一般只有**两个选项**: struct sockaddr_in（用于 IPv4）或 struct sockaddr_in6（用于 IPv6）
 >
+>   一般还需要将原生的sockaddr_in 强转成 (const struct sockaddr*)
+>
 >   
 >
 >   **socklen_t addrlen:**
@@ -241,11 +243,13 @@ backlog的值设置了服务器能同时处理的连接数, 连接数是backlog 
 >
 >返回值: 
 >
->1.大于0  表示实际接收的数据	
+>1.大于0  表示实际接收的数据的字节数	
 >
 >2.等于0  **表示连接已经断开**	
 >
->3.小于0  表示发生了错误
+>3.等于-1  表示发生了错误
+
+
 
 
 
